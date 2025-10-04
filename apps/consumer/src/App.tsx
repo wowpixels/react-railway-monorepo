@@ -1,11 +1,30 @@
-import { Box, Typography, Button } from "@mui/material";
+// components
+import {
+  Box,
+  Button,
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+  Stack,
+  Typography,
+} from "@mui/material";
 import "./App.css";
-import { Railway } from "react-railway";
+import { Railway, clickElement } from "react-railway";
+
+// hooks
 import { useRef, useState } from "react";
 
 function App() {
   const triggerEl = useRef(null);
   const [isRailwayRunning, setIsRailwayRunning] = useState(false);
+
+  const [open, setOpen] = useState(false);
+
+  const toggleDrawer = (newOpen: boolean) => () => {
+    setOpen(newOpen);
+  };
 
   const STATIONS = [
     {
@@ -20,6 +39,11 @@ function App() {
           This is the <b>center box</b> where you can showcase content.
         </Typography>
       ),
+      beforeArrival: () => console.log("Arriving at center-box"),
+      afterDeparture: () =>
+        clickElement(".my-test-button", {
+          scrollIntoView: true,
+        }),
     },
     {
       id: "top-left-box",
@@ -31,9 +55,20 @@ function App() {
       ),
     },
     {
+      id: "trash-list",
+      title: "Trash list in drawer",
+      description: "Highlight an item in the drawer.",
+      beforeArrival: async () => {
+        await clickElement(".drawer-trigger", { waitMsAfterClick: 200 });
+      },
+      afterDeparture: () => clickElement(".MuiBackdrop-root"),
+    },
+    {
       id: "top-right-box",
       title: "Top Right Box",
       description: "This box is in the top-right corner of the screen.",
+      beforeArrival: () => console.log("Arriving at top-right-box"),
+      afterDeparture: () => console.log("Leaving top-right-box"),
     },
     {
       id: "bottom-left-box",
@@ -46,6 +81,24 @@ function App() {
       description: "This box is in the bottom-right corner of the screen.",
     },
   ];
+
+  const DrawerList = (
+    <Box sx={{ width: 250 }} role="presentation" onClick={toggleDrawer(false)}>
+      <List>
+        {["All mail", "Trash", "Spam"].map((text) => (
+          <ListItem
+            key={text}
+            disablePadding
+            data-railway-station={text === "Trash" ? "trash-list" : undefined}
+          >
+            <ListItemButton>
+              <ListItemText primary={text} />
+            </ListItemButton>
+          </ListItem>
+        ))}
+      </List>
+    </Box>
+  );
 
   return (
     <>
@@ -65,13 +118,29 @@ function App() {
         }}
       />
 
-      <Button
-        ref={triggerEl}
-        variant="contained"
-        onClick={() => setIsRailwayRunning(true)}
-      >
-        Trigger Element
-      </Button>
+      <Stack>
+        <Button
+          className="my-test-button"
+          onClick={() => console.log("button is clicked 🚀")}
+        >
+          Dummy Button
+        </Button>
+
+        <Button className="drawer-trigger" onClick={toggleDrawer(true)}>
+          Open drawer
+        </Button>
+        <Drawer open={open} onClose={toggleDrawer(false)}>
+          {DrawerList}
+        </Drawer>
+
+        <Button
+          ref={triggerEl}
+          variant="contained"
+          onClick={() => setIsRailwayRunning(true)}
+        >
+          Trigger Element
+        </Button>
+      </Stack>
       <Box
         data-railway-station="top-left-box"
         sx={{
@@ -95,7 +164,6 @@ function App() {
       >
         Top Right Box!
       </Box>
-
       <Box
         data-railway-station="bottom-left-box"
         sx={{
@@ -107,7 +175,6 @@ function App() {
       >
         Bottom Left Box!
       </Box>
-
       <Box
         data-railway-station="bottom-right-box"
         sx={{

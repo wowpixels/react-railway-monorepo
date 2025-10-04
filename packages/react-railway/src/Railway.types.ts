@@ -10,6 +10,8 @@ export type Station = {
   afterDeparture?: () => void;
 };
 
+export type PaperSx = SxProps<Theme>;
+
 export type RailWayConfig = {
   trigger?: {
     element?: RefObject<null>;
@@ -17,7 +19,7 @@ export type RailWayConfig = {
     onClose?: () => void;
   };
   isViewed?: Boolean; // Note: use for external api call to check whether user already has seen the railway
-  paperSx?: SxProps<Theme>;
+  paperSx?: PaperSx;
   labels?: {
     previous?: string;
     next?: string;

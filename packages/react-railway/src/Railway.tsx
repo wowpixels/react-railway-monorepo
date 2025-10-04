@@ -1,34 +1,33 @@
+// components
+import { Typography } from "@mui/material";
 import {
-  IconButton,
-  Paper,
-  Button,
-  Box,
-  Stack,
-  Tooltip,
-  Typography,
-  Popper,
-} from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import { useState, useEffect } from "react";
+  StyledRailwayPaper,
+  StyledRailwayPopper,
+  StyledRailwayWrapperBox,
+} from "./Railway.styles";
+import RailwayFooter from "./components/RailwayFooter";
+import RailwayHeader from "./components/RailwayHeader";
+
+// hooks
+import { useEffect, useRef, useState } from "react";
+
+// types
 import { RailWayProps } from "./Railway.types";
 
-// Todo:
-// [ x ] Create the station dialog
-// [ x ] Connect the dialog to a data-railway-station id
-// [ x ] Clicking prev/next in the dialog allows you to navigate to a station
-// [ ] Allow before and after callback at a station
-// [ x ] Highlight target element
-// [ x ] add to localStorage if railway isCompleted or isViewed
+// utils
+import { measureOnce } from "./Railway.utils";
 
 const Railway = ({ id, stations, config }: RailWayProps) => {
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
-  const isRailwayCompleted =
-    localStorage.getItem(`${id || "railway"}-isCompleted`) || false;
-  const isRailwayViewed =
-    localStorage.getItem(`${id || "railway"}-isViewed`) || false;
-  const [isCompleted, setIsCompleted] = useState(isRailwayCompleted);
-  const [isViewed, setIsViewed] = useState(isRailwayViewed || false);
+
+  const readBool = (key: string) => localStorage.getItem(key) === "true";
+  const [isCompleted, setIsCompleted] = useState<boolean>(
+    readBool(`${id || "railway"}-isCompleted`)
+  );
+  const [isViewed, setIsViewed] = useState<boolean>(
+    readBool(`${id || "railway"}-isViewed`)
+  );
 
   const hasTrigger = Boolean(config?.trigger);
   const isRunning = hasTrigger
@@ -37,32 +36,53 @@ const Railway = ({ id, stations, config }: RailWayProps) => {
     ? false
     : true;
 
-  // Note: we use this for highlighting the element
-  const updateRect = (stationId: string) => {
-    const el = document.querySelector(
-      `[data-railway-station="${stationId}"]`
-    ) as HTMLElement | null;
-    if (el) {
-      const r = el.getBoundingClientRect();
-      setRect(r);
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-    } else {
-      setRect(null);
-    }
-  };
+  // Track previous step to know what we're leaving
+  const prevStepRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (stations[currentStep]) {
-      updateRect(stations[currentStep].id);
-      const resize = () => updateRect(stations[currentStep].id);
-      window.addEventListener("resize", resize);
-      window.addEventListener("scroll", resize, true);
-      return () => {
-        window.removeEventListener("resize", resize);
-        window.removeEventListener("scroll", resize, true);
-      };
-    }
-  }, [currentStep, stations]);
+    if (!isRunning || stations.length === 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const prev = prevStepRef.current;
+      if (prev !== null && prev !== currentStep) {
+        try {
+          await stations[prev]?.afterDeparture?.();
+        } catch {}
+      }
+
+      try {
+        await stations[currentStep]?.beforeArrival?.();
+      } catch {}
+
+      const curr = stations[currentStep];
+      if (!curr) return;
+
+      const rect = await measureOnce(curr.id);
+      if (!cancelled && rect) setRect(rect);
+
+      prevStepRef.current = currentStep;
+    })();
+
+    const onResize = () => {
+      const curr = stations[currentStep];
+      if (!curr) return;
+      const el = document.querySelector(
+        `[data-railway-station="${curr.id}"]`
+      ) as HTMLElement | null;
+      if (!el) return;
+      setRect(el.getBoundingClientRect());
+    };
+
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onResize, true);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onResize, true);
+    };
+  }, [currentStep, isRunning, stations]);
 
   useEffect(() => {
     if (isCompleted) {
@@ -81,6 +101,9 @@ const Railway = ({ id, stations, config }: RailWayProps) => {
   const station = stations[currentStep];
 
   const handleClose = () => {
+    stations[currentStep]?.afterDeparture?.();
+    prevStepRef.current = null;
+
     if (hasTrigger) {
       config?.trigger?.onClose?.();
     } else {
@@ -109,22 +132,8 @@ const Railway = ({ id, stations, config }: RailWayProps) => {
   return (
     <>
       {/* Backdrop with hole */}
-      <Box
-        sx={{
-          position: "fixed",
-          top: rect.top - 8,
-          left: rect.left - 8,
-          width: rect.width + 16,
-          height: rect.height + 16,
-          zIndex: (theme) => theme.zIndex.modal,
-          pointerEvents: "none",
-          borderRadius: 2,
-          boxShadow: "0 0 0 9999px rgba(0,0,0,0.6)",
-          transition: "all 0.2s ease",
-        }}
-      />
-
-      <Popper
+      <StyledRailwayWrapperBox rect={rect} />
+      <StyledRailwayPopper
         open={isRunning}
         anchorEl={document.querySelector(
           `[data-railway-station="${station.id}"]`
@@ -149,36 +158,14 @@ const Railway = ({ id, stations, config }: RailWayProps) => {
             },
           },
         ]}
-        sx={{ zIndex: (theme) => theme.zIndex.modal + 1 }}
       >
-        <Paper
-          sx={{
-            p: 2,
-            minWidth: 300,
-            borderRadius: (theme) => theme.shape.borderRadius,
-            display: "flex",
-            flexDirection: "column",
-            gap: 2,
-            ...config?.paperSx,
-          }}
-        >
+        <StyledRailwayPaper sx={config?.paperSx}>
           {/* Header */}
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-          >
-            {typeof station.title === "string" ? (
-              <Typography variant="h6">{station.title}</Typography>
-            ) : (
-              station.title
-            )}
-            <Tooltip title={config?.labels?.closeTooltip || "Close"} arrow>
-              <IconButton onClick={handleClose}>
-                <CloseIcon />
-              </IconButton>
-            </Tooltip>
-          </Stack>
+          <RailwayHeader
+            station={station}
+            config={config}
+            handleClose={handleClose}
+          />
 
           {/* Body */}
           {typeof station.description === "string" ? (
@@ -188,42 +175,15 @@ const Railway = ({ id, stations, config }: RailWayProps) => {
           )}
 
           {/* Footer */}
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            paddingTop={1}
-          >
-            <Typography variant="body2">
-              {currentStep + 1}
-              <Box
-                component="span"
-                sx={{
-                  display: "inline-block",
-                  paddingX: 0.5,
-                }}
-              >
-                {config?.labels?.stationDelimiter || "/"}
-              </Box>
-              {totalStations}
-            </Typography>
-            <Stack direction="row" spacing={2}>
-              <Button
-                variant="text"
-                onClick={handlePrev}
-                disabled={currentStep === 0}
-              >
-                {config?.labels?.previous || "Previous"}
-              </Button>
-              <Button variant="contained" onClick={handleNext}>
-                {currentStep === totalStations - 1
-                  ? config?.labels?.finish || "Finish"
-                  : config?.labels?.next || "Next"}
-              </Button>
-            </Stack>
-          </Stack>
-        </Paper>
-      </Popper>
+          <RailwayFooter
+            currentStep={currentStep}
+            totalStations={totalStations}
+            config={config}
+            handleNext={handleNext}
+            handlePrev={handlePrev}
+          />
+        </StyledRailwayPaper>
+      </StyledRailwayPopper>
     </>
   );
 };
