@@ -12,19 +12,22 @@ import {
 
 export const StyledRailwayWrapperBox = styled(Box)<
   BoxProps & {
-    rect: DOMRect;
+    rect?: DOMRect | null;
   }
 >(({ theme, rect }) => ({
   position: "fixed",
-  top: rect.top - 8,
-  left: rect.left - 8,
-  width: rect.width + 16,
-  height: rect.height + 16,
   zIndex: theme.zIndex.modal,
   pointerEvents: "none",
   borderRadius: theme.shape.borderRadius,
   boxShadow: `0 0 0 9999px ${alpha(theme.palette.common.black, 0.5)}`,
-  transition: "all 0.2s ease",
+  ...(rect
+    ? {
+        top: rect.top - 8,
+        left: rect.left - 8,
+        width: rect.width + 16,
+        height: rect.height + 16,
+      }
+    : {}),
 }));
 
 export const StyledRailwayPopper = styled(Popper)<PopperProps>(({ theme }) => ({

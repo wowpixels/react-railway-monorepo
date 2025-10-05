@@ -8,8 +8,6 @@ Think of it as a tour guide for your UI components.
 
 Demo: **Coming soon**
 
----
-
 ## 📦 Installation
 
 ```bash
@@ -17,8 +15,6 @@ npm install react-railway
 # or
 yarn add react-railway
 ```
-
----
 
 ## ⚡ Quick Start
 
@@ -52,9 +48,7 @@ const App = () => {
 };
 ```
 
----
-
-### 🗺️ Defining Stations
+## 🗺️ Defining Stations
 
 Stations define each step in your guided tour:
 
@@ -117,9 +111,7 @@ const STATIONS = [
 ];
 ```
 
----
-
-### 🖱️ Clicking Elements Automatically
+## 🖱️ Clicking Elements Automatically
 
 clickElement is a built-in utility for interacting with the DOM during your tour:
 
@@ -130,9 +122,7 @@ clickElement(".selector", {
 });
 ```
 
----
-
-### 📚 Props Overview
+## 📚 Props Overview
 
 | Prop       | Type            | Description                                 |
 | ---------- | --------------- | ------------------------------------------- |
@@ -140,8 +130,6 @@ clickElement(".selector", {
 | `stations` | `Station[]`     | Array of stations defining your tour steps  |
 | `config`   | `RailwayConfig` | Configuration for triggers, labels, etc.    |
 
----
-
-### 📝 License
+## 📝 License
 
 MIT © Twana Gul | Wowpixels

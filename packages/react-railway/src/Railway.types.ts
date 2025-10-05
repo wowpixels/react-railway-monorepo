@@ -3,7 +3,7 @@ import { SxProps, Theme } from "@mui/material";
 import { ReactNode, RefObject } from "react";
 
 export type Station = {
-  id: string;
+  id?: string;
   title: ReactNode;
   description?: ReactNode;
   beforeArrival?: () => void;
@@ -13,12 +13,7 @@ export type Station = {
 export type PaperSx = SxProps<Theme>;
 
 export type RailWayConfig = {
-  trigger?: {
-    element?: RefObject<null>;
-    isRailwayRunning: boolean;
-    onClose?: () => void;
-  };
-  isViewed?: Boolean; // Note: use for external api call to check whether user already has seen the railway
+  autoStart?: boolean;
   paperSx?: PaperSx;
   labels?: {
     previous?: string;

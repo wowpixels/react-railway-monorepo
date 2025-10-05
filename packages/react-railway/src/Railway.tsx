@@ -1,5 +1,5 @@
 // components
-import { Typography } from "@mui/material";
+import { PopperPlacementType, Typography } from "@mui/material";
 import {
   StyledRailwayPaper,
   StyledRailwayPopper,
@@ -10,34 +10,62 @@ import RailwayHeader from "./components/RailwayHeader";
 
 // hooks
 import { useEffect, useRef, useState } from "react";
+import { useRailway, useRegisterRailway } from "./hooks/useRailway";
 
 // types
 import { RailWayProps } from "./Railway.types";
 
 // utils
-import { measureOnce } from "./Railway.utils";
+import { centerAnchor, centerOffset, measureOnce } from "./Railway.utils";
 
 const Railway = ({ id, stations, config }: RailWayProps) => {
+  const {
+    runningId,
+    isRunning: engineRunning,
+    isCompleted,
+    isViewed,
+    startEngine,
+    stopEngine,
+    setCompleted,
+    setViewed,
+    railwayOrder,
+  } = useRailway();
+
+  useRegisterRailway(id);
+
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
-
-  const readBool = (key: string) => localStorage.getItem(key) === "true";
-  const [isCompleted, setIsCompleted] = useState<boolean>(
-    readBool(`${id || "railway"}-isCompleted`)
-  );
-  const [isViewed, setIsViewed] = useState<boolean>(
-    readBool(`${id || "railway"}-isViewed`)
-  );
-
-  const hasTrigger = Boolean(config?.trigger);
-  const isRunning = hasTrigger
-    ? config?.trigger?.isRailwayRunning ?? false
-    : isCompleted || isViewed
-    ? false
-    : true;
-
-  // Track previous step to know what we're leaving
   const prevStepRef = useRef<number | null>(null);
+  const [placement, setPlacement] = useState<PopperPlacementType>("bottom");
+
+  const locallyBlocked = isCompleted.includes(id) || isViewed.includes(id);
+  const isRunning = engineRunning && runningId === id;
+  const autoStart = config?.autoStart ?? false;
+
+  const isOffscreenVertically = (r: DOMRect) => {
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    return r.bottom <= 0 || r.top >= vh;
+  };
+
+  useEffect(() => {
+    if (!autoStart || locallyBlocked || engineRunning) return;
+    const firstEligible = railwayOrder.find(
+      (x) => !isCompleted.includes(x) && !isViewed.includes(x)
+    );
+    if (firstEligible === id) startEngine(id);
+  }, [
+    autoStart,
+    locallyBlocked,
+    engineRunning,
+    id,
+    startEngine,
+    railwayOrder,
+    isCompleted,
+    isViewed,
+  ]);
+
+  const station = stations[currentStep];
+  const hasTarget = Boolean(station?.id);
 
   useEffect(() => {
     if (!isRunning || stations.length === 0) return;
@@ -51,28 +79,53 @@ const Railway = ({ id, stations, config }: RailWayProps) => {
           await stations[prev]?.afterDeparture?.();
         } catch {}
       }
-
       try {
-        await stations[currentStep]?.beforeArrival?.();
+        await station?.beforeArrival?.();
       } catch {}
 
-      const curr = stations[currentStep];
-      if (!curr) return;
+      // If no target id → no measure/scroll; just clear rect and choose a placement
+      if (!hasTarget) {
+        if (!cancelled) {
+          setRect(null);
+          setPlacement("auto"); // Popper decides best side
+        }
+        prevStepRef.current = currentStep;
+        return;
+      }
 
-      const rect = await measureOnce(curr.id);
-      if (!cancelled && rect) setRect(rect);
+      let r = await measureOnce(station.id!);
+      if (r && isOffscreenVertically(r)) {
+        const el = document.querySelector(
+          `[data-railway-station="${station.id}"]`
+        ) as HTMLElement | null;
+        if (el?.scrollIntoView) {
+          el.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest",
+            inline: "nearest",
+          });
+          await new Promise((res) => setTimeout(res, 350));
+          r = await measureOnce(station.id!);
+        }
+      }
+
+      if (!cancelled && r) {
+        setRect(r);
+        setPlacement(isOffscreenVertically(r) ? "bottom" : "top");
+      }
 
       prevStepRef.current = currentStep;
     })();
 
     const onResize = () => {
-      const curr = stations[currentStep];
-      if (!curr) return;
+      if (!hasTarget) return;
       const el = document.querySelector(
-        `[data-railway-station="${curr.id}"]`
+        `[data-railway-station="${station!.id}"]`
       ) as HTMLElement | null;
       if (!el) return;
-      setRect(el.getBoundingClientRect());
+      const r = el.getBoundingClientRect();
+      setRect(r);
+      setPlacement(isOffscreenVertically(r) ? "bottom" : "top");
     };
 
     window.addEventListener("resize", onResize);
@@ -82,45 +135,30 @@ const Railway = ({ id, stations, config }: RailWayProps) => {
       window.removeEventListener("resize", onResize);
       window.removeEventListener("scroll", onResize, true);
     };
-  }, [currentStep, isRunning, stations]);
-
-  useEffect(() => {
-    if (isCompleted) {
-      localStorage.setItem(`${id || "railway"}-isCompleted`, `${isCompleted}`);
-      localStorage.setItem(`${id || "railway"}-isViewed`, `${isViewed}`);
-    } else {
-      localStorage.setItem(`${id || "railway"}-isViewed`, `${isViewed}`);
-    }
-  }, [isCompleted, isViewed]);
+  }, [currentStep, isRunning, stations, hasTarget]);
 
   if (!isRunning || stations.length === 0) return null;
 
-  if (!rect) return null;
-
   const totalStations = stations.length;
-  const station = stations[currentStep];
 
   const handleClose = () => {
     stations[currentStep]?.afterDeparture?.();
     prevStepRef.current = null;
 
-    if (hasTrigger) {
-      config?.trigger?.onClose?.();
-    } else {
-      setRect(null);
-    }
+    stopEngine(id);
 
     if (currentStep === totalStations - 1) {
-      setIsCompleted(true);
+      setCompleted(id, true);
     }
+    setViewed(id, true);
 
+    setRect(null);
     setCurrentStep(0);
-    setIsViewed(true);
   };
 
   const handleNext = () => {
     if (currentStep === totalStations - 1) {
-      setIsCompleted(true);
+      setCompleted(id, true);
       handleClose();
     } else {
       setCurrentStep((prev) => Math.min(prev + 1, totalStations - 1));
@@ -135,14 +173,18 @@ const Railway = ({ id, stations, config }: RailWayProps) => {
       <StyledRailwayWrapperBox rect={rect} />
       <StyledRailwayPopper
         open={isRunning}
-        anchorEl={document.querySelector(
-          `[data-railway-station="${station.id}"]`
-        )}
-        placement="bottom"
+        anchorEl={
+          hasTarget
+            ? document.querySelector(`[data-railway-station="${station.id}"]`)
+            : centerAnchor
+        }
+        placement={hasTarget ? placement : "auto"}
+        popperOptions={{ strategy: "fixed" }}
         modifiers={[
           {
             name: "flip",
-            enabled: true,
+            enabled: hasTarget,
+            options: { fallbackPlacements: ["top", "bottom"] },
           },
           {
             name: "preventOverflow",
@@ -153,9 +195,7 @@ const Railway = ({ id, stations, config }: RailWayProps) => {
           },
           {
             name: "offset",
-            options: {
-              offset: [0, 12], // 12px gap from target
-            },
+            options: hasTarget ? { offset: [0, 12] } : { offset: centerOffset },
           },
         ]}
       >
