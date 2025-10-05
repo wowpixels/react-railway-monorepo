@@ -16,119 +16,234 @@ npm install react-railway
 yarn add react-railway
 ```
 
-## ⚡ Quick Start
+## ⚙️ Setup
+
+Wrap your app with the provider once:
+
+```jsx
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { RailwayProvider } from "react-railway";
+import App from "./App";
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <RailwayProvider>
+      <App />
+    </RailwayProvider>
+  </StrictMode>
+);
+```
+
+## ⚡ Quick Start (hook-only)
 
 Import the component and manage the running state:
 
 ```jsx
-import { useState } from "react";
-import { Railway, clickElement } from "react-railway";
-import { Typography } from "@mui/material";
+import { Railway, useRailway } from "react-railway";
+import { Typography, Button } from "@mui/material";
 
-const App = () => {
-  const [isRailwayRunning, setIsRailwayRunning] = useState(false);
+const STATIONS = [
+  {
+    id: "center-box",
+    title: <Typography variant="h6">Center Box</Typography>,
+    description: "This is a center highlight.",
+  },
+  {
+    id: "top-right-box",
+    title: "Top Right Box",
+    description: "Lives in the header bar.",
+  },
+];
+
+export default function App() {
+  const { startEngine } = useRailway();
 
   return (
-    <Railway
-      id="my-custom-trip"
-      stations={STATIONS}
-      config={{
-        trigger: {
-          element: triggerEl, // your trigger element reference
-          isRailwayRunning,
-          onClose: () => setIsRailwayRunning(false),
-        },
-        labels: {
-          previous: "Vorige",
-          stationDelimiter: "van",
-        },
-      }}
-    />
+    <>
+      <Railway id="my-custom-trip" stations={STATIONS} />
+      <Button onClick={() => startEngine("my-custom-trip")}>
+        Start Railway
+      </Button>
+    </>
   );
-};
+}
 ```
 
 ## 🗺️ Defining Stations
 
-Stations define each step in your guided tour:
-
-Each station can have:
-• title & description – text or JSX
-• beforeArrival – runs before showing the station
-• afterDeparture – runs after leaving the station
+Each step is a station:
+• id?: string – When present, the popper targets that element ([data-railway-station="..."]).
+• If no id is provided, the popper appears centered in the viewport (no backdrop hole).
+• title, description – string or JSX.
+• beforeArrival(), afterDeparture() – optional lifecycle hooks (sync or async).
 
 ```jsx
 const STATIONS = [
+  // Centered pop — no id
   {
-    id: "center-box",
-    title: (
-      <Typography variant="h6" color="primary">
-        Center Box
-      </Typography>
-    ),
-    description: (
-      <Typography variant="body2">
-        This is the <b>center box</b> where you can showcase content.
-      </Typography>
-    ),
-    beforeArrival: () => console.log("Arriving at center-box"),
-    afterDeparture: () =>
-      clickElement(".my-test-button", { scrollIntoView: true }),
+    title: "Welcome!",
+    description: "This step is centered on the screen.",
   },
-  {
-    id: "top-left-box",
-    title: "Top Left Box",
-    description: (
-      <Typography variant="body2" color="secondary">
-        This box is in the top-left corner of the screen.
-      </Typography>
-    ),
-  },
+  // Anchored to an element
   {
     id: "trash-list",
     title: "Trash list in drawer",
-    description: "Highlight an item in the drawer.",
+    description: "Opens the drawer and highlights Trash.",
     beforeArrival: async () => {
       await clickElement(".drawer-trigger", { waitMsAfterClick: 200 });
     },
     afterDeparture: () => clickElement(".MuiBackdrop-root"),
   },
-  {
-    id: "top-right-box",
-    title: "Top Right Box",
-    description: "This box is in the top-right corner of the screen.",
-  },
-  {
-    id: "bottom-left-box",
-    title: "Bottom Left Box",
-    description: "This box is in the bottom-left corner of the screen.",
-  },
-  {
-    id: "bottom-right-box",
-    title: "Bottom Right Box",
-    description: "This box is in the bottom-right corner of the screen.",
-  },
 ];
 ```
 
-## 🖱️ Clicking Elements Automatically
+Attach data-railway-station to elements you want to highlight:
 
-clickElement is a built-in utility for interacting with the DOM during your tour:
+```html
+<div data-railway-station="trash-list">Trash</div>
+```
+
+## 🚦 Autostart + Ordering
+
+You can let a Railway auto-start (e.g. after an API permit), and control which Railway runs first when multiple are present.
+
+```jsx
+import { useEffect, useState } from "react";
+import { Railway, useRailway } from "react-railway";
+
+export default function App() {
+  const { setRailwayOrder } = useRailway();
+  const [canAutoStart, setCanAutoStart] = useState(false);
+
+  useEffect(() => {
+    // First eligible id will auto-start
+    setRailwayOrder(["first-railway", "second-railway"]);
+  }, [setRailwayOrder]);
+
+  useEffect(() => {
+    // mock API
+    (async () => {
+      await new Promise(r => setTimeout(r, 600));
+      setCanAutoStart(true);
+    })();
+  }, []);
+
+  return (
+    <>
+      <Railway id="first-railway" stations={...} config={{ autoStart: canAutoStart }} />
+      <Railway id="second-railway" stations={...} />
+    </>
+  );
+}
+```
+
+Rules:
+• config.autoStart only starts a Railway if it’s the first eligible id in railwayOrder.
+• A Railway that’s already viewed/completed won’t autostart again.
+• Manual startEngine(id) always starts it, regardless of viewed/completed.
+
+## 📦 Persistence
+
+The provider remembers per-railway state in localStorage:
+• Viewed: Railway was shown at least once.
+• Completed: user finished the last station.
+
+Keys look like: railway:${id}:viewed and railway:${id}:completed.
+
+## 🧠 Hook API
+
+```jsx
+const {
+  // state
+  runningId, // string | null
+  isRunning, // boolean (any railway running?)
+  isCompleted, // string[] (railway ids)
+  isViewed, // string[] (railway ids)
+  railwayOrder, // string[]
+
+  // actions
+  registerRailway, // (id) — handled for you by <Railway/> + useRegisterRailway
+  unregisterRailway, // (id)
+  startEngine, // (id)
+  stopEngine, // (id)
+  setCompleted, // (id, value = true)
+  setViewed, // (id, value = true)
+  setRailwayOrder, // (ids: string[])
+} = useRailway();
+```
+
+Auto-registering a Railway id (if you render custom shells):
+
+```jsx
+import { useRegisterRailway } from "react-railway";
+useRegisterRailway("my-custom-trip");
+```
+
+## 🧰 Utility: clickElement
+
+Programmatically click (and optionally scroll to) a DOM element.
+Great for opening drawers, tabs, or menus before highlighting.
 
 ```js
-clickElement(".selector", {
-  scrollIntoView: true, // Scroll into view before clicking
-  waitMsAfterClick: 200, // Optional wait time after clicking (ms)
+import { clickElement } from "react-railway";
+
+await clickElement(".drawer-trigger", {
+  scrollIntoView: true, // scroll before click
+  scrollBehavior: "smooth", // 'auto' | 'smooth'
+  focusAfterClick: false,
+  waitMsAfterClick: 200, // wait for animations
+  afterClickWaitFor: '[data-railway-station="trash-list"]', // cheap polling
+  afterClickWaitTimeoutMs: 1500,
 });
+```
+
+## 🎛️ Config
+
+```ts
+type RailWayConfig = {
+  autoStart?: boolean; // default false
+  paperSx?: SxProps<Theme>; // MUI sx for the popper paper
+  labels?: {
+    previous?: string;
+    next?: string;
+    finish?: string;
+    closeTooltip?: string;
+    stationDelimiter?: string;
+  };
+};
+```
+
+Behavior details:
+• If a target element is off-screen, Railway scrolls it minimally into view, then shows the popper.
+• If the target is visible, the popper prefers top (flips to bottom when necessary).
+• If a station has no id, the popper is centered on the viewport (no backdrop hole).
+
+## 🧩 Types
+
+```ts
+type Station = {
+  id?: string; // optional → centered popper
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  beforeArrival?: () => void | Promise<void>;
+  afterDeparture?: () => void | Promise<void>;
+};
+
+type RailWayProps = {
+  id: string;
+  stations: Station[];
+  config?: RailWayConfig;
+};
 ```
 
 ## 📚 Props Overview
 
-| Prop       | Type            | Description                                 |
-| ---------- | --------------- | ------------------------------------------- |
-| `id`       | `string`        | Unique identifier for this Railway instance |
-| `stations` | `Station[]`     | Array of stations defining your tour steps  |
-| `config`   | `RailwayConfig` | Configuration for triggers, labels, etc.    |
+| Prop       | Type            | Description                                |
+| ---------- | --------------- | ------------------------------------------ |
+| `id`       | `string`        | Unique identifier for the Railway instance |
+| `stations` | `Station[]`     | Steps of your railway                      |
+| `config`   | `RailwayConfig` | autoStart, paperSx, labels                 |
 
 ## 📝 License
 
