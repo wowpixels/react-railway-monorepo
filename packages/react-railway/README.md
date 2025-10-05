@@ -73,10 +73,11 @@ export default function App() {
 ## 🗺️ Defining Stations
 
 Each step is a station:
-• id?: string – When present, the popper targets that element ([data-railway-station="..."]).
-• If no id is provided, the popper appears centered in the viewport (no backdrop hole).
-• title, description – string or JSX.
-• beforeArrival(), afterDeparture() – optional lifecycle hooks (sync or async).
+
+- id?: string – When present, the popper targets that element ([data-railway-station="..."]).
+- If no id is provided, the popper appears centered in the viewport (no backdrop hole).
+- title, description – string or JSX.
+- beforeArrival(), afterDeparture() – optional lifecycle hooks (sync or async).
 
 ```jsx
 const STATIONS = [
@@ -139,15 +140,17 @@ export default function App() {
 ```
 
 Rules:
-• config.autoStart only starts a Railway if it’s the first eligible id in railwayOrder.
-• A Railway that’s already viewed/completed won’t autostart again.
-• Manual startEngine(id) always starts it, regardless of viewed/completed.
+
+- config.autoStart only starts a Railway if it’s the first eligible id in railwayOrder.
+- A Railway that’s already viewed/completed won’t autostart again.
+- Manual startEngine(id) always starts it, regardless of viewed/completed.
 
 ## 📦 Persistence
 
 The provider remembers per-railway state in localStorage:
-• Viewed: Railway was shown at least once.
-• Completed: user finished the last station.
+
+- Viewed: Railway was shown at least once.
+- Completed: user finished the last station.
 
 Keys look like: railway:${id}:viewed and railway:${id}:completed.
 
@@ -215,9 +218,10 @@ type RailWayConfig = {
 ```
 
 Behavior details:
-• If a target element is off-screen, Railway scrolls it minimally into view, then shows the popper.
-• If the target is visible, the popper prefers top (flips to bottom when necessary).
-• If a station has no id, the popper is centered on the viewport (no backdrop hole).
+
+- If a target element is off-screen, Railway scrolls it minimally into view, then shows the popper.
+- If the target is visible, the popper prefers top (flips to bottom when necessary).
+- If a station has no id, the popper is centered on the viewport (no backdrop hole).
 
 ## 🧩 Types
 
